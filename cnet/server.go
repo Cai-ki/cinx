@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Cai-ki/cinx/ciface"
+	"github.com/Cai-ki/cinx/cutils"
 )
 
 // iServer 接口实现，定义一个Server服务类
@@ -39,7 +40,10 @@ func CallBackToClient(conn *net.TCPConn, data []byte, cnt int) error {
 // 开启网络服务
 func (s *Server) Start() {
 	fmt.Printf("[START] Server listenner at IP: %s, Port %d, is starting\n", s.IP, s.Port)
-
+	fmt.Printf("[Cinx] Version: %s, MaxConn: %d,  MaxPacketSize: %d\n",
+		cutils.GlobalObject.Version,
+		cutils.GlobalObject.MaxConn,
+		cutils.GlobalObject.MaxPacketSize)
 	//开启一个go去做服务端Linster业务
 	go func() {
 		//1 获取一个TCP的Addr
@@ -57,7 +61,7 @@ func (s *Server) Start() {
 		}
 
 		//已经监听成功
-		fmt.Println("start Zinx server  ", s.Name, " succ, now listenning...")
+		fmt.Println("start Cinx server  ", s.Name, " succ, now listenning...")
 
 		//TODO server.go 应该有一个自动生成ID的方法
 		var cid uint32
@@ -111,14 +115,16 @@ func (s *Server) AddRouter(router ciface.IRouter) {
 /*
 创建一个服务器句柄
 */
-func NewServer(name string) ciface.IServer {
+func NewServer() ciface.IServer {
+	//先初始化全局配置文件
+	cutils.GlobalObject.Reload()
+
 	s := &Server{
-		Name:      name,
+		Name:      cutils.GlobalObject.Name, //从全局参数获取
 		IPVersion: "tcp4",
-		IP:        "0.0.0.0",
-		Port:      7777,
+		IP:        cutils.GlobalObject.Host,    //从全局参数获取
+		Port:      cutils.GlobalObject.TcpPort, //从全局参数获取
 		Router:    nil,
 	}
-
 	return s
 }

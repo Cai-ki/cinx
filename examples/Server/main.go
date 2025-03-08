@@ -41,7 +41,7 @@ func (this *PingRouter) PostHandle(request ciface.IRequest) {
 
 func main() {
 	//创建一个server句柄
-	s := cnet.NewServer("[cinx V0.3]")
+	s := cnet.NewServer()
 
 	s.AddRouter(&PingRouter{})
 
