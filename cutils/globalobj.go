@@ -23,6 +23,8 @@ type GlobalObj struct {
 	WorkerPoolSize   uint32 //业务工作Worker池的数量
 	MaxWorkerTaskLen uint32 //业务工作Worker对应负责的任务队列最大任务存储数量
 
+	MaxMsgChanLen uint32 //SendBuffMsg发送消息的缓冲最大长度
+
 	ConfFilePath string //配置文件路径
 }
 
@@ -60,6 +62,7 @@ func init() {
 		ConfFilePath:     "conf/cinx.json",
 		WorkerPoolSize:   10,
 		MaxWorkerTaskLen: 1024,
+		MaxMsgChanLen:    4,
 	}
 
 	//从配置文件中加载一些用户配置的参数
