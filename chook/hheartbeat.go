@@ -1,4 +1,4 @@
-package ctimer
+package chook
 
 import (
 	"fmt"

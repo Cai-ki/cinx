@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 
+	"github.com/Cai-ki/cinx/chook"
 	"github.com/Cai-ki/cinx/ciface"
 	"github.com/Cai-ki/cinx/cnet"
 	"github.com/Cai-ki/cinx/crouter"
-	"github.com/Cai-ki/cinx/ctimer"
 )
 
 type helloRouter struct {
@@ -28,8 +28,8 @@ func main() {
 	s.AddRouter(crouter.MsgIDHeartbeatRequest, &crouter.HeartbeatPingRouter{})
 	s.AddRouter(crouter.MsgIDHeartbeatResponse, &crouter.HeartbeatPongRouter{})
 	s.SetOnConnStart(func(conn ciface.IConnection) {
-		go ctimer.StartHeartbeat(conn)
-		go ctimer.StartHeartbeatChecker(conn)
+		go chook.StartHeartbeat(conn)
+		go chook.StartHeartbeatChecker(conn)
 	})
 	s.AddRouter(0, &helloRouter{})
 	//开启服务
