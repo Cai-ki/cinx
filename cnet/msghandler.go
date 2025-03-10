@@ -9,21 +9,21 @@ import (
 )
 
 type MsgHandle struct {
-	Apis           map[uint32]ciface.IRouter //存放每个MsgId 所对应的处理方法的map属性
-	WorkerPoolSize uint32                    //业务工作Worker池的数量
-	TaskQueue      []chan ciface.IRequest    //Worker负责取任务的消息队列
+	Apis           map[uint32]ciface.IRouter // 映射 MsgID 对应的处理方法
+	WorkerPoolSize uint32                    // worker pool 大小
+	TaskQueues     []chan ciface.IRequest    // worker 获取任务的消息队列
 }
 
 func NewMsgHandle() *MsgHandle {
 	return &MsgHandle{
 		Apis:           make(map[uint32]ciface.IRouter),
 		WorkerPoolSize: cutils.GlobalObject.WorkerPoolSize,
-		//一个worker对应一个queue
-		TaskQueue: make([]chan ciface.IRequest, cutils.GlobalObject.WorkerPoolSize),
+		//一个 worker 对应一个 task 队列
+		TaskQueues: make([]chan ciface.IRequest, cutils.GlobalObject.WorkerPoolSize),
 	}
 }
 
-// 马上以非阻塞方式处理消息
+// 非阻塞方式处理消息
 func (mh *MsgHandle) DoMsgHandler(request ciface.IRequest) {
 	handler, ok := mh.Apis[request.GetMsgID()]
 	if !ok {
@@ -39,48 +39,47 @@ func (mh *MsgHandle) DoMsgHandler(request ciface.IRequest) {
 
 // 为消息添加具体的处理逻辑
 func (mh *MsgHandle) AddRouter(msgId uint32, router ciface.IRouter) {
-	//1 判断当前msg绑定的API处理方法是否已经存在
+	// 判断当前 msg 绑定的 API 处理方法是否已经存在
 	if _, ok := mh.Apis[msgId]; ok {
-		panic("repeated api , msgId = " + strconv.Itoa(int(msgId)))
+		panic("[Cinx] Repeated api , msgId = " + strconv.Itoa(int(msgId)))
 	}
-	//2 添加msg与api的绑定关系
+	// 添加 msg 与 API 的绑定关系
 	mh.Apis[msgId] = router
-	fmt.Println("Add api msgId = ", msgId)
+	fmt.Println("[Cinx] Add api msgId = ", msgId)
 }
 
-// 启动一个Worker工作流程
+// worker 工作流程
 func (mh *MsgHandle) StartOneWorker(workerID int, taskQueue chan ciface.IRequest) {
-	fmt.Println("Worker ID = ", workerID, " is started.")
-	//不断的等待队列中的消息
-	for {
-		select {
-		//有消息则取出队列的Request，并执行绑定的业务方法
-		case request := <-taskQueue:
-			mh.DoMsgHandler(request)
-		}
+	// 监听队列中的消息
+	for request := range taskQueue {
+		mh.DoMsgHandler(request)
 	}
+	// for {
+	// 	select {
+	// 	case request := <-taskQueue:
+	// 		mh.DoMsgHandler(request)
+	// 	}
+	// }
 }
 
-// 启动worker工作池
+// 启动 worker 工作池
 func (mh *MsgHandle) StartWorkerPool() {
-	//遍历需要启动worker的数量，依此启动
 	for i := 0; i < int(mh.WorkerPoolSize); i++ {
-		//一个worker被启动
-		//给当前worker对应的任务队列开辟空间
-		mh.TaskQueue[i] = make(chan ciface.IRequest, cutils.GlobalObject.MaxWorkerTaskLen)
-		//启动当前Worker，阻塞的等待对应的任务队列是否有消息传递进来
-		go mh.StartOneWorker(i, mh.TaskQueue[i])
+		// 初始化当前 worker 消息队列管道
+		mh.TaskQueues[i] = make(chan ciface.IRequest, cutils.GlobalObject.MaxWorkerTaskLen)
+
+		fmt.Println("[Cinx] Worker ID = ", i, " is started.")
+		// 创建一个 worker 协程
+		go mh.StartOneWorker(i, mh.TaskQueues[i])
 	}
 }
 
-// 将消息交给TaskQueue,由worker进行处理
+// 分发消息给消息队列处理
 func (mh *MsgHandle) SendMsgToTaskQueue(request ciface.IRequest) {
-	//根据ConnID来分配当前的连接应该由哪个worker负责处理
-	//轮询的平均分配法则
-
-	//得到需要处理此条连接的workerID
+	// 朴素的任务分配策略
 	workerID := request.GetConnection().GetConnID() % mh.WorkerPoolSize
-	fmt.Println("Add ConnID=", request.GetConnection().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
-	//将请求消息发送给任务队列
-	mh.TaskQueue[workerID] <- request
+	fmt.Println("[Cinx] Add ConnID=", request.GetConnection().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
+
+	// 将消息发送给对应的 worker 的消息队列
+	mh.TaskQueues[workerID] <- request
 }
