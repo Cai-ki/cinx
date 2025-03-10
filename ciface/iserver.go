@@ -20,4 +20,5 @@ type IServer interface {
 	CallOnConnStart(conn IConnection)
 	//调用连接OnConnStop Hook函数
 	CallOnConnStop(conn IConnection)
+	GetMsgHandler() IMsgHandle // 临时
 }

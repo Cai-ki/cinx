@@ -249,14 +249,14 @@ func (c *Connection) SetProperty(key string, value interface{}) {
 }
 
 // 获取链接属性
-func (c *Connection) GetProperty(key string) (interface{}, error) {
+func (c *Connection) GetProperty(key string) (interface{}, bool) {
 	c.propertyLock.RLock()
 	defer c.propertyLock.RUnlock()
 
 	if value, ok := c.property[key]; ok {
-		return value, nil
+		return value, true
 	} else {
-		return nil, errors.New("no property found")
+		return nil, false
 	}
 }
 

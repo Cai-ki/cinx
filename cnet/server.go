@@ -157,3 +157,7 @@ func NewServer() ciface.IServer {
 	}
 	return s
 }
+
+func (s *Server) GetMsgHandler() ciface.IMsgHandle {
+	return s.msgHandler
+}
