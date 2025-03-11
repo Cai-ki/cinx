@@ -77,8 +77,8 @@ func (mh *MsgHandle) StartWorkerPool() {
 // 分发消息给消息队列处理
 func (mh *MsgHandle) SendMsgToTaskQueue(request ciface.IRequest) {
 	// 朴素的任务分配策略
-	workerID := request.GetConnection().GetConnID() % mh.WorkerPoolSize
-	fmt.Println("[Cinx] Add ConnID=", request.GetConnection().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
+	workerID := request.GetConn().GetConnID() % mh.WorkerPoolSize
+	fmt.Println("[Cinx] Add ConnID=", request.GetConn().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
 
 	// 将消息发送给对应的 worker 的消息队列
 	mh.TaskQueues[workerID] <- request

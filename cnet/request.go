@@ -3,12 +3,12 @@ package cnet
 import "github.com/Cai-ki/cinx/ciface"
 
 type Request struct {
-	conn ciface.IConnection //已经和客户端建立好的 链接
-	msg  ciface.IMessage    //客户端请求的数据
+	conn ciface.IConn    // 请求归属的连接
+	msg  ciface.IMessage // 解析好的消息
 }
 
 //获取请求连接信息
-func (r *Request) GetConnection() ciface.IConnection {
+func (r *Request) GetConn() ciface.IConn {
 	return r.conn
 }
 

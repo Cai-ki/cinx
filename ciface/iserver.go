@@ -13,12 +13,12 @@ type IServer interface {
 	//得到链接管理
 	GetConnMgr() IConnManager
 	//设置该Server的连接创建时Hook函数
-	SetOnConnStart(func(IConnection))
+	SetOnConnStart(func(IConn))
 	//设置该Server的连接断开时的Hook函数
-	SetOnConnStop(func(IConnection))
+	SetOnConnStop(func(IConn))
 	//调用连接OnConnStart Hook函数
-	CallOnConnStart(conn IConnection)
+	CallOnConnStart(conn IConn)
 	//调用连接OnConnStop Hook函数
-	CallOnConnStop(conn IConnection)
+	CallOnConnStop(conn IConn)
 	GetMsgHandler() IMsgHandle // 临时
 }

@@ -20,7 +20,7 @@ type HeartbeatPingRouter struct {
 func (h *HeartbeatPingRouter) Handle(request ciface.IRequest) {
 	// 收到心跳请求，直接回复响应
 	fmt.Println("[Cinx] Received heartbeat request, sending pong...")
-	err := request.GetConnection().SendMsg(MsgIDHeartbeatResponse, []byte("pong"))
+	err := request.GetConn().SendMsg(MsgIDHeartbeatResponse, []byte("pong"))
 	if err != nil {
 		fmt.Println("[Cinx] Send heartbeat response error:", err)
 	}
@@ -32,6 +32,6 @@ type HeartbeatPongRouter struct {
 
 func (h *HeartbeatPongRouter) Handle(request ciface.IRequest) {
 	// 收到心跳请求，直接回复响应
-	request.GetConnection().SetProperty("lastActiveTime", time.Now())
+	request.GetConn().SetProperty("lastActiveTime", time.Now())
 	fmt.Println("[Cinx] Received heartbeat response, updating last active time...")
 }

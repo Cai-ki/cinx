@@ -12,8 +12,8 @@ import (
 连接管理模块
 */
 type ConnManager struct {
-	connections map[uint32]ciface.IConnection //管理的连接信息
-	connLock    sync.RWMutex                  //读写连接的读写锁
+	connections map[uint32]ciface.IConn //管理的连接信息
+	connLock    sync.RWMutex            //读写连接的读写锁
 }
 
 /*
@@ -21,12 +21,12 @@ type ConnManager struct {
 */
 func NewConnManager() *ConnManager {
 	return &ConnManager{
-		connections: make(map[uint32]ciface.IConnection),
+		connections: make(map[uint32]ciface.IConn),
 	}
 }
 
 // 添加链接
-func (connMgr *ConnManager) Add(conn ciface.IConnection) {
+func (connMgr *ConnManager) Add(conn ciface.IConn) {
 	//保护共享资源Map 加写锁
 	connMgr.connLock.Lock()
 	defer connMgr.connLock.Unlock()
@@ -38,7 +38,7 @@ func (connMgr *ConnManager) Add(conn ciface.IConnection) {
 }
 
 // 删除连接
-func (connMgr *ConnManager) Remove(conn ciface.IConnection) {
+func (connMgr *ConnManager) Remove(conn ciface.IConn) {
 	//保护共享资源Map 加写锁
 	connMgr.connLock.Lock()
 	defer connMgr.connLock.Unlock()
@@ -50,7 +50,7 @@ func (connMgr *ConnManager) Remove(conn ciface.IConnection) {
 }
 
 // 利用ConnID获取链接
-func (connMgr *ConnManager) Get(connID uint32) (ciface.IConnection, error) {
+func (connMgr *ConnManager) Get(connID uint32) (ciface.IConn, error) {
 	//保护共享资源Map 加读锁
 	connMgr.connLock.RLock()
 	defer connMgr.connLock.RUnlock()

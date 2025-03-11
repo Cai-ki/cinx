@@ -9,7 +9,7 @@ import (
 	"github.com/Cai-ki/cinx/crouter"
 )
 
-func StartHeartbeat(conn ciface.IConnection) {
+func StartHeartbeat(conn ciface.IConn) {
 	conn.SetProperty("lastActiveTime", time.Now())
 	ticker := time.NewTicker(5 * time.Second) // 5秒发送一次心跳
 	defer ticker.Stop()
@@ -28,10 +28,10 @@ func StartHeartbeat(conn ciface.IConnection) {
 	}
 }
 
-func StartHeartbeatChecker(conn ciface.IConnection) {
+func StartHeartbeatChecker(conn ciface.IConn) {
 	// 启动一个协程定期检查连接活性
 	for {
-		time.Sleep(10 * time.Second) // 10秒检查一次
+		time.Sleep(5 * time.Second) // 10秒检查一次
 
 		// 获取最后一次活跃时间
 		lastActiveTime, ok := conn.GetProperty("lastActiveTime")

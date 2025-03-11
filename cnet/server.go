@@ -23,8 +23,8 @@ type Server struct {
 	//当前 server 的链接管理器
 	ConnMgr ciface.IConnManager
 
-	OnConnStart func(conn ciface.IConnection)
-	OnConnStop  func(conn ciface.IConnection)
+	OnConnStart func(conn ciface.IConn)
+	OnConnStop  func(conn ciface.IConn)
 }
 
 // 开启 server 服务（无阻塞）
@@ -117,17 +117,17 @@ func (s *Server) GetConnMgr() ciface.IConnManager {
 }
 
 // 设置 server 的连接创建时 hook 函数
-func (s *Server) SetOnConnStart(hookFunc func(ciface.IConnection)) {
+func (s *Server) SetOnConnStart(hookFunc func(ciface.IConn)) {
 	s.OnConnStart = hookFunc
 }
 
 // 设置 server 的连接断开时 hook 函数
-func (s *Server) SetOnConnStop(hookFunc func(ciface.IConnection)) {
+func (s *Server) SetOnConnStop(hookFunc func(ciface.IConn)) {
 	s.OnConnStop = hookFunc
 }
 
 // 调用 hook 函数
-func (s *Server) CallOnConnStart(conn ciface.IConnection) {
+func (s *Server) CallOnConnStart(conn ciface.IConn) {
 	if s.OnConnStart != nil {
 		fmt.Println("[Cinx] CallOnConnStart....")
 		s.OnConnStart(conn)
@@ -135,7 +135,7 @@ func (s *Server) CallOnConnStart(conn ciface.IConnection) {
 }
 
 // 调用 hook 函数
-func (s *Server) CallOnConnStop(conn ciface.IConnection) {
+func (s *Server) CallOnConnStop(conn ciface.IConn) {
 	if s.OnConnStop != nil {
 		fmt.Println("[Cinx] CallOnConnStop....")
 		s.OnConnStop(conn)
