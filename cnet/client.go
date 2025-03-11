@@ -7,7 +7,6 @@ import (
 	"github.com/Cai-ki/cinx/ciface"
 )
 
-// 客户端接口实现
 type Client struct {
 	Name      string
 	IPVersion string
@@ -31,7 +30,9 @@ func NewClient(name, ipVersion, ip string, port int) ciface.IClient {
 		IP:        ip,
 		Port:      port,
 
-		msgHandler: NewMsgHandle(),
+		msgHandler:  NewMsgHandle(),
+		onConnStart: func(conn ciface.IConn) {},
+		onConnStop:  func(conn ciface.IConn) {},
 	}
 	return c
 }
@@ -70,9 +71,8 @@ func (c *Client) Start() {
 }
 func (c *Client) Stop() {
 	con := c.Conn()
-	if con != nil {
-		con.Stop()
-	}
+	con.Stop()
+	c.exitChan <- struct{}{}
 }
 func (c *Client) Conn() ciface.IConn {
 	return c.conn
