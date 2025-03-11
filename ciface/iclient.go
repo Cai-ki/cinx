@@ -1,6 +1,5 @@
 package ciface
 
-// 客户端接口
 type IClient interface {
 	Restart()
 	Start()
