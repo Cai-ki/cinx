@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Cai-ki/cinx/ciface"
 	"github.com/Cai-ki/cinx/cutils"
@@ -18,24 +19,23 @@ type Connection struct {
 	Conn *net.TCPConn
 	//当前连接的ID 也可以称作为SessionID，ID全局唯一
 	ConnID uint32
-	//当前连接的关闭状态
-	isClosed bool
+
+	// 正常退出
+	IsClosed atomic.Bool
+
+	// 异常退出
+	IsAborted atomic.Bool
 
 	//消息管理MsgId和对应处理方法的消息管理模块
 	MsgHandler ciface.IMsgHandle
 
-	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
-	//无缓冲管道，用于读、写两个goroutine之间的消息通信
-	msgChan chan []byte
-	//有缓冲管道，用于读、写两个goroutine之间的消息通信
+	ExitBuffChan chan struct{}
+
+	msgChan     chan []byte
 	msgBuffChan chan []byte
-	// ================================
-	//链接属性
-	property map[string]interface{}
-	//保护链接属性修改的锁
+
+	property     map[string]interface{}
 	propertyLock sync.RWMutex
-	// ================================
 }
 
 // 创建连接的方法
@@ -44,15 +44,16 @@ func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHan
 		TcpServer:    server, //将隶属的server传递进来
 		Conn:         conn,
 		ConnID:       connID,
-		isClosed:     false,
 		MsgHandler:   msgHandler,
-		ExitBuffChan: make(chan bool, 1),
+		ExitBuffChan: make(chan struct{}, 1),
 		msgChan:      make(chan []byte), //msgChan初始化
 		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
 		property:     make(map[string]interface{}), //对链接属性map初始化
 	}
-	//将新创建的Conn添加到链接管理中
-	c.TcpServer.GetConnMgr().Add(c) //将当前新创建的连接添加到ConnManager中
+	c.IsClosed.Store(false)
+	c.IsAborted.Store(false)
+
+	c.TcpServer.GetConnMgr().Add(c)
 	return c
 }
 
@@ -61,13 +62,17 @@ func NewClientConn(client ciface.IClient, conn *net.TCPConn) ciface.IConn {
 		TcpServer:    NewServer(), // TODO: 临时创建一个server，后续需要修改
 		Conn:         conn,
 		ConnID:       0, // ignore
-		isClosed:     false,
 		MsgHandler:   client.GetMsgHandler(),
-		ExitBuffChan: make(chan bool, 1),
+		ExitBuffChan: make(chan struct{}, 1),
 		msgChan:      make(chan []byte), //msgChan初始化
 		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
 		property:     make(map[string]interface{}), //对链接属性map初始化
 	}
+	c.IsClosed.Store(false)
+	c.IsAborted.Store(false)
+
+	c.TcpServer.SetOnConnStart(client.GetOnConnStart())
+	c.TcpServer.SetOnConnStop(client.GetOnConnStop())
 	return c
 }
 
@@ -84,6 +89,7 @@ func (c *Connection) StartReader() {
 		headData := make([]byte, dp.GetHeadLen())
 		if _, err := io.ReadFull(c.GetTCPConn(), headData); err != nil {
 			fmt.Println("read msg head error ", err)
+			c.IsAborted.Store(true)
 			break
 		}
 
@@ -91,6 +97,7 @@ func (c *Connection) StartReader() {
 		msg, err := dp.Unpack(headData)
 		if err != nil {
 			fmt.Println("unpack error ", err)
+			c.IsAborted.Store(true)
 			break
 		}
 
@@ -100,23 +107,20 @@ func (c *Connection) StartReader() {
 			data = make([]byte, msg.GetDataLen())
 			if _, err := io.ReadFull(c.GetTCPConn(), data); err != nil {
 				fmt.Println("read msg data error ", err)
-				// continue
+				c.IsAborted.Store(true)
 				break
 			}
 		}
 		msg.SetData(data)
 
-		//得到当前客户端请求的Request数据
 		req := Request{
 			conn: c,
-			msg:  msg, //将之前的buf 改成 msg
+			msg:  msg,
 		}
 
 		if cutils.GlobalObject.WorkerPoolSize > 0 {
-			//已经启动工作池机制，将消息交给Worker处理
 			c.MsgHandler.SendMsgToTaskQueue(&req)
 		} else {
-			//从绑定好的消息和对应的处理方法中执行对应的Handle方法
 			go c.MsgHandler.DoMsgHandler(&req)
 		}
 	}
@@ -132,10 +136,15 @@ func (c *Connection) StartWriter() {
 
 	for {
 		select {
-		case data := <-c.msgChan:
-			//有数据要写给客户端
-			if _, err := c.Conn.Write(data); err != nil {
-				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
+		case data, ok := <-c.msgChan:
+			if ok {
+				//有数据要写给客户端
+				if _, err := c.Conn.Write(data); err != nil {
+					fmt.Println("Send Data error:, ", err, " Conn Writer exit")
+					return
+				}
+			} else {
+				fmt.Println("msgChan is Closed")
 				return
 			}
 			//针对有缓冲channel需要些的数据处理
@@ -148,11 +157,8 @@ func (c *Connection) StartWriter() {
 				}
 			} else {
 				fmt.Println("msgBuffChan is Closed")
-				break
+				return
 			}
-		case <-c.ExitBuffChan:
-			//conn已经关闭
-			return
 		}
 	}
 }
@@ -171,37 +177,32 @@ func (c *Connection) Start() {
 	for {
 		select {
 		case <-c.ExitBuffChan:
-			//得到退出消息，不再阻塞
+			// 得到退出消息，不再阻塞
 			return
 		}
 	}
 }
 
-// 停止连接，结束当前连接状态M
+// 停止连接，结束当前连接状态
 func (c *Connection) Stop() {
-	//1. 如果当前链接已经关闭
-	if c.isClosed == true {
+	if c.IsClosed.Load() {
 		return
 	}
-	c.isClosed = true
+	c.IsClosed.Store(true)
 
-	//TODO Connection Stop() 如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
-
-	//如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
 	c.TcpServer.CallOnConnStop(c)
 
 	// 关闭socket链接
 	c.Conn.Close()
 
-	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
+	c.ExitBuffChan <- struct{}{}
 
-	//将链接从连接管理器中删除
-	c.TcpServer.GetConnMgr().Remove(c) //删除conn从ConnManager中
+	// 将链接从连接管理器中删除
+	c.TcpServer.GetConnMgr().Remove(c)
 
-	//关闭该链接全部管道
 	close(c.ExitBuffChan)
 	close(c.msgBuffChan)
+	close(c.msgChan)
 }
 
 // 从当前连接获取原始的socket TCPConn
@@ -221,7 +222,8 @@ func (c *Connection) RemoteAddr() net.Addr {
 
 // 直接将Message数据发送数据给远程的TCP客户端
 func (c *Connection) SendMsg(msgId uint32, data []byte) error {
-	if c.isClosed == true {
+	IsClosed := c.IsClosed.Load()
+	if IsClosed {
 		return errors.New("Connection closed when send msg")
 	}
 	//将data封包，并且发送
@@ -239,7 +241,8 @@ func (c *Connection) SendMsg(msgId uint32, data []byte) error {
 }
 
 func (c *Connection) SendBuffMsg(msgId uint32, data []byte) error {
-	if c.isClosed == true {
+	IsClosed := c.IsClosed.Load()
+	if IsClosed {
 		return errors.New("Connection closed when send buff msg")
 	}
 	//将data封包，并且发送
