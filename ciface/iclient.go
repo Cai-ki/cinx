@@ -1,18 +1,16 @@
 package ciface
 
-//定义服务器接口
-type IServer interface {
+// 客户端接口
+type IClient interface {
+	Restart()
 	Start()
 	Stop()
-	Serve()
-
 	AddRouter(msgId uint32, router IRouter)
-
-	GetConnMgr() IConnManager
+	Conn() IConn
 	GetMsgHandler() IMsgHandle
 
 	SetOnConnStart(func(IConn))
 	SetOnConnStop(func(IConn))
-	CallOnConnStart(conn IConn)
-	CallOnConnStop(conn IConn)
+	GetOnConnStart() func(IConn)
+	GetOnConnStop() func(IConn)
 }

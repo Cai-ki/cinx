@@ -55,6 +55,22 @@ func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHan
 	c.TcpServer.GetConnMgr().Add(c) //将当前新创建的连接添加到ConnManager中
 	return c
 }
+
+func NewClientConn(client ciface.IClient, conn *net.TCPConn) ciface.IConn {
+	c := &Connection{
+		TcpServer:    NewServer(), // TODO: 临时创建一个server，后续需要修改
+		Conn:         conn,
+		ConnID:       0, // ignore
+		isClosed:     false,
+		MsgHandler:   client.GetMsgHandler(),
+		ExitBuffChan: make(chan bool, 1),
+		msgChan:      make(chan []byte), //msgChan初始化
+		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
+		property:     make(map[string]interface{}), //对链接属性map初始化
+	}
+	return c
+}
+
 func (c *Connection) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")

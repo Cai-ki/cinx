@@ -42,6 +42,8 @@ func StartHeartbeatChecker(conn ciface.IConn) {
 		// 超过 15 秒未收到消息，判定超时
 		if time.Since(lastActiveTime.(time.Time)) > 15*time.Second {
 			fmt.Println("Connection timeout, closing...")
+			conn.SendBuffMsg(404, []byte("timeout"))
+			time.Sleep(5 * time.Second)
 			conn.Stop()
 			return
 		}

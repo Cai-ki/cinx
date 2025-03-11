@@ -13,7 +13,7 @@ type Server struct {
 	//服务器的名称
 	Name string
 	//tcp4 or other
-	TcpVersion string
+	IPVersion string
 	//服务绑定的 IP 地址
 	IP string
 	//服务绑定的端口
@@ -42,16 +42,16 @@ func (s *Server) Start() {
 		s.msgHandler.StartWorkerPool()
 
 		//1 封装 tcp 地址
-		addr, err := net.ResolveTCPAddr(s.TcpVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
+		addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
 		if err != nil {
 			fmt.Println("[Cinx] resolve tcp address err: ", err)
 			return
 		}
 
 		//2 创建监听 socket
-		listenner, err := net.ListenTCP(s.TcpVersion, addr)
+		listenner, err := net.ListenTCP(s.IPVersion, addr)
 		if err != nil {
-			fmt.Println("[Cinx] listen", s.TcpVersion, "err", err)
+			fmt.Println("[Cinx] listen", s.IPVersion, "err", err)
 			return
 		}
 
@@ -149,7 +149,7 @@ func NewServer() ciface.IServer {
 
 	s := &Server{
 		Name:       cutils.GlobalObject.Name,
-		TcpVersion: "tcp4",
+		IPVersion:  "tcp4",
 		IP:         cutils.GlobalObject.Host,
 		Port:       cutils.GlobalObject.TcpPort,
 		msgHandler: NewMsgHandle(),
