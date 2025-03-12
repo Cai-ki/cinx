@@ -35,6 +35,8 @@ func (mh *MsgHandle) DoMsgHandler(request ciface.IRequest) {
 	handler.PreHandle(request)
 	handler.Handle(request)
 	handler.PostHandle(request)
+
+	request.Done()
 }
 
 // 为消息添加具体的处理逻辑

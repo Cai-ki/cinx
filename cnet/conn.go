@@ -19,9 +19,9 @@ type Connection struct {
 
 	ConnID uint32
 
-	IsClosed atomic.Bool
-
-	IsAborted atomic.Bool
+	IsClosed     atomic.Bool
+	IsAborted    atomic.Bool
+	IsClosedOnce atomic.Bool
 
 	MsgHandler ciface.IMsgHandle
 
@@ -30,11 +30,16 @@ type Connection struct {
 	msgChan     chan []byte
 	msgBuffChan chan []byte
 
+	// readerClosedChan chan struct{}
+	writerClosedChan chan struct{}
+
 	property     map[string]interface{}
 	propertyLock sync.RWMutex
 
 	onConnStart func(conn ciface.IConn)
 	onConnStop  func(conn ciface.IConn)
+
+	wg *sync.WaitGroup
 }
 
 func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHandler ciface.IMsgHandle) *Connection {
@@ -46,12 +51,16 @@ func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHan
 		ExitBuffChan: make(chan struct{}, 1),
 		msgChan:      make(chan []byte),
 		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
-		property:     make(map[string]interface{}),
-		onConnStart:  server.GetOnConnStart(),
-		onConnStop:   server.GetOnConnStop(),
+		// readerClosedChan: make(chan struct{}),
+		writerClosedChan: make(chan struct{}),
+		property:         make(map[string]interface{}),
+		onConnStart:      server.GetOnConnStart(),
+		onConnStop:       server.GetOnConnStop(),
+		wg:               &sync.WaitGroup{},
 	}
 	c.IsClosed.Store(false)
 	c.IsAborted.Store(false)
+	c.IsClosedOnce.Store(false)
 
 	server.GetConnMgr().Add(c)
 	return c
@@ -69,6 +78,7 @@ func NewClientConn(client ciface.IClient, conn *net.TCPConn) ciface.IConn {
 		property:     make(map[string]interface{}),
 		onConnStart:  client.GetOnConnStart(),
 		onConnStop:   client.GetOnConnStop(),
+		wg:           &sync.WaitGroup{},
 	}
 	c.IsClosed.Store(false)
 	c.IsAborted.Store(false)
@@ -87,15 +97,21 @@ func (c *Connection) StartReader() {
 
 		headData := make([]byte, dp.GetHeadLen())
 		if _, err := io.ReadFull(c.GetTCPConn(), headData); err != nil {
-			fmt.Println("read msg head error ", err)
-			c.IsAborted.Store(true)
+			c.IsClosed.Store(true)
+			if err == io.EOF {
+				fmt.Println("Connection closed by peer")
+			} else {
+				fmt.Println("read msg head error ", err)
+				c.IsAborted.Store(true)
+			}
 			break
 		}
 
 		msg, err := dp.Unpack(headData)
 		if err != nil {
-			fmt.Println("unpack error ", err)
+			c.IsClosed.Store(true)
 			c.IsAborted.Store(true)
+			fmt.Println("unpack error ", err)
 			break
 		}
 
@@ -103,8 +119,9 @@ func (c *Connection) StartReader() {
 		if msg.GetDataLen() > 0 {
 			data = make([]byte, msg.GetDataLen())
 			if _, err := io.ReadFull(c.GetTCPConn(), data); err != nil {
-				fmt.Println("read msg data error ", err)
+				c.IsClosed.Store(true)
 				c.IsAborted.Store(true)
+				fmt.Println("read msg data error ", err)
 				break
 			}
 		}
@@ -113,8 +130,10 @@ func (c *Connection) StartReader() {
 		req := Request{
 			conn: c,
 			msg:  msg,
+			wg:   c.wg,
 		}
 
+		c.wg.Add(1)
 		if cutils.GlobalObject.WorkerPoolSize > 0 {
 			c.MsgHandler.SendMsgToTaskQueue(&req)
 		} else {
@@ -123,9 +142,6 @@ func (c *Connection) StartReader() {
 	}
 }
 
-/*
-写消息Goroutine， 用户将数据发送给客户端
-*/
 func (c *Connection) StartWriter() {
 
 	fmt.Println("[Writer Goroutine is running]")
@@ -135,10 +151,9 @@ func (c *Connection) StartWriter() {
 		select {
 		case data, ok := <-c.msgChan:
 			if ok {
-
 				if _, err := c.Conn.Write(data); err != nil {
 					fmt.Println("Send Data error:, ", err, " Conn Writer exit")
-					return
+					// return
 				}
 			} else {
 				fmt.Println("msgChan is Closed")
@@ -150,7 +165,7 @@ func (c *Connection) StartWriter() {
 
 				if _, err := c.Conn.Write(data); err != nil {
 					fmt.Println("Send Buff Data error:, ", err, " Conn Writer exit")
-					return
+					// return
 				}
 			} else {
 				fmt.Println("msgBuffChan is Closed")
@@ -161,37 +176,39 @@ func (c *Connection) StartWriter() {
 }
 
 func (c *Connection) Start() {
-	go c.StartReader()
 	go c.StartWriter()
+	go c.StartReader()
 
 	c.onConnStart(c)
 
-	for {
-		select {
-		case <-c.ExitBuffChan:
+	// for {
+	// 	select {
+	// 	case <-c.ExitBuffChan:
 
-			return
-		}
-	}
+	// 		return
+	// 	}
+	// }
 }
 
 func (c *Connection) Stop() {
-	if c.IsClosed.Load() {
+	if c.IsClosedOnce.Load() {
 		return
 	}
+	c.IsClosedOnce.Store(true)
 	c.IsClosed.Store(true)
+
+	c.wg.Wait()
 
 	c.onConnStop(c)
 
 	c.Conn.Close()
 
-	c.ExitBuffChan <- struct{}{}
-
 	c.TcpServer.GetConnMgr().Remove(c)
 
-	close(c.ExitBuffChan)
-	close(c.msgBuffChan)
-	close(c.msgChan)
+	// c.ExitBuffChan <- struct{}{}
+	// close(c.ExitBuffChan)
+	// close(c.msgBuffChan)
+	// close(c.msgChan)
 }
 
 func (c *Connection) GetTCPConn() *net.TCPConn {
@@ -207,10 +224,6 @@ func (c *Connection) RemoteAddr() net.Addr {
 }
 
 func (c *Connection) SendMsg(msgId uint32, data []byte) error {
-	IsClosed := c.IsClosed.Load()
-	if IsClosed {
-		return errors.New("Connection closed when send msg")
-	}
 
 	dp := NewDataPack()
 	msg, err := dp.Pack(NewMsgPackage(msgId, data))
@@ -219,17 +232,15 @@ func (c *Connection) SendMsg(msgId uint32, data []byte) error {
 		return errors.New("Pack error msg ")
 	}
 
+	// if c.IsClosed.Load() {
+	// 	return errors.New("Connection closed when send msg")
+	// }
 	c.msgChan <- msg
 
 	return nil
 }
 
 func (c *Connection) SendBuffMsg(msgId uint32, data []byte) error {
-	IsClosed := c.IsClosed.Load()
-	if IsClosed {
-		return errors.New("Connection closed when send buff msg")
-	}
-
 	dp := NewDataPack()
 	msg, err := dp.Pack(NewMsgPackage(msgId, data))
 	if err != nil {
@@ -237,6 +248,9 @@ func (c *Connection) SendBuffMsg(msgId uint32, data []byte) error {
 		return errors.New("Pack error msg ")
 	}
 
+	// if c.IsClosed.Load() {
+	// 	return errors.New("Connection closed when send buff msg")
+	// }
 	c.msgBuffChan <- msg
 
 	return nil
