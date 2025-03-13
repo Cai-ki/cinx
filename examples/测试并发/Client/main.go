@@ -21,8 +21,8 @@ func (h *helloRouter) Handle(request ciface.IRequest) {
 }
 
 const (
-	concurrency  = 200    // 并发连接数
-	requestCount = 100000 // 总请求数
+	concurrency  = 200   // 并发连接数
+	requestCount = 10000 // 总请求数
 )
 
 func main() {

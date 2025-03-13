@@ -25,7 +25,7 @@ type Connection struct {
 
 	MsgHandler ciface.IMsgHandle
 
-	ExitBuffChan chan struct{}
+	ExitChan chan struct{}
 
 	msgChan     chan []byte
 	msgBuffChan chan []byte
@@ -42,16 +42,15 @@ type Connection struct {
 	wg *sync.WaitGroup
 }
 
-func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHandler ciface.IMsgHandle) *Connection {
+func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHandler ciface.IMsgHandle) (*Connection, error) {
 	c := &Connection{
-		TcpServer:    server,
-		Conn:         conn,
-		ConnID:       connID,
-		MsgHandler:   msgHandler,
-		ExitBuffChan: make(chan struct{}, 1),
-		msgChan:      make(chan []byte),
-		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
-		// readerClosedChan: make(chan struct{}),
+		TcpServer:        server,
+		Conn:             conn,
+		ConnID:           connID,
+		MsgHandler:       msgHandler,
+		ExitChan:         make(chan struct{}),
+		msgChan:          make(chan []byte),
+		msgBuffChan:      make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
 		writerClosedChan: make(chan struct{}),
 		property:         make(map[string]interface{}),
 		onConnStart:      server.GetOnConnStart(),
@@ -62,23 +61,23 @@ func NewConntion(server ciface.IServer, conn *net.TCPConn, connID uint32, msgHan
 	c.IsAborted.Store(false)
 	c.IsClosedOnce.Store(false)
 
-	server.GetConnMgr().Add(c)
-	return c
+	err := server.GetConnMgr().Add(c)
+	return c, err
 }
 
 func NewClientConn(client ciface.IClient, conn *net.TCPConn) ciface.IConn {
 	c := &Connection{
-		TcpServer:    NewServer(),
-		Conn:         conn,
-		ConnID:       0,
-		MsgHandler:   client.GetMsgHandler(),
-		ExitBuffChan: make(chan struct{}, 1),
-		msgChan:      make(chan []byte),
-		msgBuffChan:  make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
-		property:     make(map[string]interface{}),
-		onConnStart:  client.GetOnConnStart(),
-		onConnStop:   client.GetOnConnStop(),
-		wg:           &sync.WaitGroup{},
+		TcpServer:   NewServer(),
+		Conn:        conn,
+		ConnID:      0,
+		MsgHandler:  client.GetMsgHandler(),
+		ExitChan:    make(chan struct{}),
+		msgChan:     make(chan []byte),
+		msgBuffChan: make(chan []byte, cutils.GlobalObject.MaxMsgChanLen),
+		property:    make(map[string]interface{}),
+		onConnStart: client.GetOnConnStart(),
+		onConnStop:  client.GetOnConnStop(),
+		wg:          &sync.WaitGroup{},
 	}
 	c.IsClosed.Store(false)
 	c.IsAborted.Store(false)
@@ -92,7 +91,6 @@ func (c *Connection) StartReader() {
 	defer c.Stop()
 
 	for {
-
 		dp := NewDataPack()
 
 		headData := make([]byte, dp.GetHeadLen())

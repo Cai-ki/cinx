@@ -1,6 +1,8 @@
 package ciface
 
-import "net"
+import (
+	"net"
+)
 
 type IConn interface {
 	Start()

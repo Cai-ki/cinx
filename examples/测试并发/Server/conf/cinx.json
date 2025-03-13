@@ -3,5 +3,5 @@
     "Host": "127.0.0.1",
     "TcpPort": 7777,
     "MaxConn": 12000,
-    "WorkerPoolSize": 20
+    "WorkerPoolSize": 10
 }
