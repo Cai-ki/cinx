@@ -21,8 +21,8 @@ func (h *helloRouter) Handle(request ciface.IRequest) {
 }
 
 const (
-	concurrency  = 200   // 并发连接数
-	requestCount = 10000 // 总请求数
+	concurrency  = 1      // 并发连接数
+	requestCount = 100000 // 总请求数
 )
 
 func main() {
@@ -40,7 +40,6 @@ func main() {
 				wg2.Done()
 			}})
 			client.Start()
-			// fmt.Println(client.Conn().(*cnet.Connection).IsClosed.Load())
 			ct := requestCount / concurrency
 			for ct > 0 {
 				wg2.Add(1)

@@ -85,3 +85,9 @@ func (mh *MsgHandle) SendMsgToTaskQueue(request ciface.IRequest) {
 	// 将消息发送给对应的 worker 的消息队列
 	mh.TaskQueues[workerID] <- request
 }
+
+func (mh *MsgHandle) Stop() {
+	for _, c := range mh.TaskQueues {
+		close(c)
+	}
+}

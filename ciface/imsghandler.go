@@ -5,4 +5,5 @@ type IMsgHandle interface {
 	AddRouter(msgId uint32, router IRouter)
 	DoMsgHandler(request IRequest)
 	SendMsgToTaskQueue(request IRequest)
+	Stop()
 }
